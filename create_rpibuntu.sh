@@ -14,8 +14,8 @@
 # for ARM (from package qemu-user-static on Ubuntu). Please see the
 # "check_tool" lines below.
 
-RELEASE=${RELEASE-15.04}
-RELEASE_NAME=${RELEASE_NAME-vivid}
+RELEASE=${RELEASE-15.10}
+RELEASE_NAME=${RELEASE_NAME-wily}
 IMG_SIZE_MB=${IMG_SIZE_MB-700}
 BOOT_SIZE_MB=${BOOT_SIZE_MB-100}
 ADDITIONAL_PKGS=${ADDITIONAL_PKGS-ssh}
@@ -25,7 +25,8 @@ IMG_PATH=${IMG_PATH-rpibuntu_${RELEASE}.img}
 function errcheck() {
 	LAST=$?
 	if [ "${LAST}" != "0" ]; then
-		echo "error, \"$1\" failed $2"
+		echo "error, \"$1\" failed with return value ${LAST}. output:"
+		echo "$2"
 		caller
 		exit 1
 	fi
@@ -76,21 +77,31 @@ else
 	echo "using device file ${LODEV}"
 fi
 
+# TODO check both partition
 echo "check if partition table exists"
 PARTTABLE=$(sfdisk -d ${LODEV} | grep "Id=83")
 
 if [ "${PARTTABLE}" == "" ]; then
 	echo "create new partition table"
-	OUTPUT=$(sfdisk -L ${LODEV} 2>&1 <<EOF
-unit: sectors
+	OUTPUT=$(fdisk ${LODEV} 2>&1 <<EOF
+n
+p
+1
 
-/dev/loop0p1 : start=     2048, size=   $(( ${BOOT_SIZE_MB} * 2048 )), Id= c
-/dev/loop0p2 : start=   206848, size=         , Id=83
-/dev/loop0p3 : start=        0, size=        0, Id= 0
-/dev/loop0p4 : start=        0, size=        0, Id= 0
++${BOOT_SIZE_MB}M
+t
+c
+n
+p
+2
+
+
+w
 EOF
 )
-	errcheck "sfdisk" "${OUTPUT}"
+# TODO fdisk always returns an error code as the new partition table will not
+#      be used automatically
+# 	errcheck "fdisk" "${OUTPUT}"
 fi
 
 LOBASE=$(basename ${LODEV})
@@ -265,7 +276,7 @@ apt-get update
 apt-get -y dist-upgrade
 
 # somehow debootstrapping fails for python3.4, install manually
-apt-get install -y python3.4 u-boot-tools btrfs-tools dosfstools
+apt-get install -y u-boot-tools btrfs-tools dosfstools
 
 apt-get install -y ${ADDITIONAL_PKGS}
 
@@ -289,9 +300,9 @@ useradd -m -U -G sudo,video,audio,users -s /bin/bash rpibuntu
 echo \"rpibuntu:rpibuntu\" | chpasswd
 
 echo \"installing RPI2 packages\"
-# force install as packages are not signed yet
 apt-get install -y rpi-configs rpi-firmware rpi-tools uboot-bin-rpi2
 
+# install kernel later to ensure the update-uboot script is in place
 apt-get install linux-image-rpi
 
 cp /usr/share/doc/rpi2-configs/config.txt /boot/
@@ -343,8 +354,10 @@ fi
 
 echo "Installation finished."
 
-### compress image for publication:
-# zip rpibuntu_15.04.img.zip rpibuntu_15.04.img
+echo
+echo "To compress image for publication:"
+echo "zip ${IMG_PATH}.zip ${IMG_PATH}"
 
-### decompress and write to card:
-# cat rpibuntu_15.04.img.zip | gunzip -d | dd of=/dev/sdX
+echo
+echo "To decompress and write to card:"
+echo "cat ${IMG_PATH}.zip | gunzip -d | dd of=/dev/sdX"

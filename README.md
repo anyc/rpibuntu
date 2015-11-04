@@ -18,7 +18,7 @@ Features:
 
 This repo contains:
 
-* create_rpibuntu.sh: a script to create and customize your own rpibuntu image
+* create_rpibuntu.sh: a script to create and customize your own RPiBuntu image
 * MD5SUMS: the MD5 hashes of the [RPiBuntu images](http://rpibuntu.kicherer.org/images/)
 
 See [rpibuntu.kicherer.org](http://rpibuntu.kicherer.org) for further information
