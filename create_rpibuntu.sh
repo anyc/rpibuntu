@@ -5,22 +5,45 @@
 # This script creates a disk image with an almost minimal Ubuntu Linux that
 # boots on a Raspberry Pi 2 system.
 #
-# You can configure the process using environment variables. For example,
-# to directly write to a SD card, execute:
-#
-#	LODEV=/dev/sdX create_rpibuntu.sh
-#
 # To use this script you need a few other tools, e.g., a static qemu binary
 # for ARM (from package qemu-user-static on Ubuntu). Please see the
 # "check_tool" lines below.
+#
+# You can configure the image using environment variables. For example,
+# to directly write to a SD card known as /dev/sdX, execute:
+#
+#	LODEV=/dev/sdX create_rpibuntu.sh
+#
+# Or, to create an image with a (16 GB - 200 MB) root partition, a 200 MB boot
+# partition and a wifi-ready setup for common wifi hardware, call:
+#
+#   IMG_SIZE_MB=16000 BOOT_SIZE_MB=200 \
+#     ADDITIONAL_PKGS="ssh linux-firmware connman" create_rpibuntu.sh
 
+[ -f create_rpibuntu.cfg ] && source create_rpibuntu.cfg
+
+### choose the Ubuntu release
 RELEASE=${RELEASE-15.10}
 RELEASE_NAME=${RELEASE_NAME-wily}
+RPIBUNTU_REVISION=${RPIBUNTU_REVISION-0}
+
+### default size of the complete image and the boot partition
 IMG_SIZE_MB=${IMG_SIZE_MB-700}
 BOOT_SIZE_MB=${BOOT_SIZE_MB-100}
+
+### additional packages that will be installed
 ADDITIONAL_PKGS=${ADDITIONAL_PKGS-ssh}
 
-IMG_PATH=${IMG_PATH-rpibuntu_${RELEASE}.img}
+### execute this script in the chroot before starting the shell and finishing
+### the image
+# USER_SCRIPT=/path/to/script
+
+### if set to 0, do not start a shell inside the new installation
+START_SHELL=${START_SHELL-1}
+
+# name of the resulting image (default: rpibuntu_15.10.img)
+[ ${RPIBUNTU_REVISION} -gt 0 ] && REV=".${RPIBUNTU_REVISION}"
+IMG_PATH=${IMG_PATH-rpibuntu_${RELEASE}${REV}.img}
 
 function errcheck() {
 	LAST=$?
@@ -84,6 +107,7 @@ PARTTABLE=$(sfdisk -d ${LODEV} | grep "Id=83")
 if [ "${PARTTABLE}" == "" ]; then
 	echo "create new partition table"
 	OUTPUT=$(fdisk ${LODEV} 2>&1 <<EOF
+o
 n
 p
 1
@@ -117,7 +141,7 @@ fi
 ROOTDIR=$(mktemp -d)/
 BOOTDIR=${ROOTDIR}/boot/
 
-echo "mounting ${ROOTDEV} to ${ROOTDIR}"
+echo "trying to mount ${ROOTDEV} to ${ROOTDIR}"
 mount "${ROOTDEV}" "${ROOTDIR}" 2>/dev/null
 RES=$?
 
@@ -128,12 +152,12 @@ if [ "${RES}" == "32" ]; then
 	mount "${ROOTDEV}" "${ROOTDIR}" 2>/dev/null || errcheck "mount ${ROOTDEV}"
 fi
 
-SUBVOL=$(btrfs subvolume list "${ROOTDIR}" | grep "@root")
+SUBVOL=$(btrfs subvolume list "${ROOTDIR}" | grep " @root$")
 if [ "${SUBVOL}" == "" ]; then
 	echo "Creating new root subvolume"
 	btrfs subvolume create "${ROOTDIR}"/@root || errcheck "subvolume create"
-	#btrfs subvolume list "${ROOTDIR}"
-	btrfs subvolume set-default 256 "${ROOTDIR}" || errcheck "subvolume set-default"
+	ID=$(btrfs subvolume list "${ROOTDIR}" | grep "@root$" | sed -r 's/ID ([[:digit:]]+).*/\1/g')
+	btrfs subvolume set-default ${ID} "${ROOTDIR}" || errcheck "subvolume set-default"
 	
 	umount "${ROOTDIR}"
 	mount "${ROOTDEV}" "${ROOTDIR}" || errcheck "final mount root"
@@ -170,8 +194,13 @@ else
 fi
 
 echo "Preparing for chroot"
-cp $(which ${QEMU_ARM}) "${ROOTDIR}"/usr/bin || errcheck
-cp ${UBUNTU_KEYRING} "${ROOTDIR}"/tmp/ || errcheck
+cp "$(which ${QEMU_ARM})" "${ROOTDIR}"/usr/bin || errcheck
+cp "${UBUNTU_KEYRING}" "${ROOTDIR}"/tmp/ || errcheck
+
+# disable device file creation in recent debootstrap versions as we bind mount /dev
+if [ -f "${ROOTDIR}"/debootstrap/functions ]; then
+	sed -ri "s/^\s+setup_devices_simple\s*$/echo disabled_mknod/" "${ROOTDIR}"/debootstrap/functions
+fi
 
 mount -o bind /dev "${ROOTDIR}"/dev || errcheck
 mount -o bind /dev/pts "${ROOTDIR}"/dev/pts || errcheck
@@ -179,12 +208,13 @@ mount -t sysfs /sys "${ROOTDIR}"/sys || errcheck
 mount -t proc /proc "${ROOTDIR}"/proc || errcheck
 cp /proc/mounts "${ROOTDIR}"/etc/mtab || errcheck
 
+# we do not pass --keyring as gpgv is not available in the chroot yet
 echo "
 echo \"Entered deboostrap chroot\"
 if [ -f /debootstrap/debootstrap ]; then
 	/debootstrap/debootstrap --second-stage
 else
-	echo \"Second deboostrap stage already run\"
+	echo \"Second deboostrap stage already ran\"
 fi
 
 " > "${ROOTDIR}"/tmp/chroot_script
@@ -192,8 +222,6 @@ chmod +x "${ROOTDIR}"/tmp/chroot_script
 
 echo "Starting deboostrap chroot"
 LC_ALL=C chroot "${ROOTDIR}" /tmp/chroot_script
-
-
 
 echo "Preparing system configuration"
 
@@ -230,15 +258,15 @@ DHCP=both
 
 
 # make sure these directories are mounted (again)
-mount -o bind /dev/pts "${ROOTDIR}"/dev/pts || errcheck
-mount -t sysfs /sys "${ROOTDIR}"/sys || errcheck
-mount -t proc /proc "${ROOTDIR}"/proc || errcheck
+# mount -o bind /dev/pts "${ROOTDIR}"/dev/pts || errcheck
+# mount -t sysfs /sys "${ROOTDIR}"/sys || errcheck
+# mount -t proc /proc "${ROOTDIR}"/proc || errcheck
 cp /proc/mounts "${ROOTDIR}"/etc/mtab || errcheck
 
 echo "#! /bin/bash
 echo \"Entered chroot\"
 
-echo \"adding gpg key to verify custom repo signature\"
+echo \"adding gpg key to verify rpibuntu repo signature\"
 echo \"-----BEGIN PGP PUBLIC KEY BLOCK-----
 Version: GnuPG v2
 
@@ -270,15 +298,17 @@ ZZbXhBjuajpDI6+YZXLN011sJ2PySEAORnzDIMZvU/6G/ffI4ZlBGg9oZBM6
 =bQxK
 -----END PGP PUBLIC KEY BLOCK-----\" | apt-key add -
 
+# prevent service startup in chroot
+echo 'exit 101' > /usr/sbin/policy-rc.d
+chmod +x /usr/sbin/policy-rc.d
+
 echo \"finalize package installation\"
 apt-get -y -f install
 apt-get update
 apt-get -y dist-upgrade
 
-# somehow debootstrapping fails for python3.4, install manually
+# install additional packages required for RPiBuntu
 apt-get install -y u-boot-tools btrfs-tools dosfstools
-
-apt-get install -y ${ADDITIONAL_PKGS}
 
 echo \"setup locales\"
 if [ \"\$(locale -a | grep en_US)\" == \"\" ]; then
@@ -303,15 +333,18 @@ echo \"installing RPI2 packages\"
 apt-get install -y rpi-configs rpi-firmware rpi-tools uboot-bin-rpi2
 
 # install kernel later to ensure the update-uboot script is in place
-apt-get install linux-image-rpi
+apt-get install -y linux-image-rpi
 
 cp /usr/share/doc/rpi2-configs/config.txt /boot/
 echo -e \"\nkernel=uboot.bin\" >> /boot/config.txt
 
-# dbus is started during installation hence it blocks umount later
-kill -9 \`cat /var/run/dbus/pid\`
-
 touch /tmp/.config_chroot
+
+if [ \"${ADDITIONAL_PKGS}\" != \"\" ]; then
+	# install requested packages by user
+	apt-get install -y ${ADDITIONAL_PKGS}
+fi
+
 " > "${ROOTDIR}"/tmp/chroot_script
 chmod +x "${ROOTDIR}"/tmp/chroot_script
 
@@ -320,16 +353,26 @@ if [ ! -f /tmp/.config_chroot ]; then
 	LC_ALL=C chroot "${ROOTDIR}" /tmp/chroot_script
 fi
 
+if [ "${USER_SCRIPT}" != "" ]; then
+	BASE="$(basename ${USER_SCRIPT})"
+	cp "${USER_SCRIPT}" "${ROOTDIR}"/tmp/
+	chmod +x "${ROOTDIR}/tmp/${BASE}"
+	LC_ALL=en_US.UTF-8 chroot "${ROOTDIR}" /tmp/"${BASE}"
+fi
+
 echo ""
 echo "Setup finished."
 echo ""
-echo "Starting a shell inside the chroot environment. You can make further"
-echo "modifications now like installing additional packages."
-echo ""
-echo "To finish the installation, please enter \"exit\"."
-echo ""
 
-LC_ALL=en_US.UTF-8 chroot "${ROOTDIR}" /bin/bash
+if [ "${START_SHELL}" == "1" ]; then
+	echo "Starting a shell inside the chroot environment. You can make further"
+	echo "modifications now like installing additional packages."
+	echo ""
+	echo "To finish the installation, please enter \"exit\"."
+	echo ""
+
+	LC_ALL=en_US.UTF-8 chroot "${ROOTDIR}" /bin/bash
+fi
 
 
 
@@ -339,6 +382,9 @@ LC_ALL=en_US.UTF-8 chroot "${ROOTDIR}" /bin/bash
 echo "Cleaning up..."
 
 # LC_ALL=en_US.UTF-8 chroot "${ROOTDIR}" rm /tmp/*
+
+# remove service startup prevention
+rm "${ROOTDIR}"/usr/sbin/policy-rc.d
 
 sync && sleep 1
 
