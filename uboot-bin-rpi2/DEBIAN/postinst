@@ -1,0 +1,11 @@
+#! /bin/bash
+
+if [ "$1" == "configure" ]; then
+	# deb install files into dpkg_tmp/ and we move it here to
+	# /boot because direct installation into /boot fails as
+	# we overwrite files and /boot is a FAT32 which does
+	# not support symlinks (for backup)
+
+	cp -r /boot/dpkg_tmp_"${DPKG_MAINTSCRIPT_PACKAGE}"/* /boot/
+	rm -r /boot/dpkg_tmp_"${DPKG_MAINTSCRIPT_PACKAGE}"
+fi
