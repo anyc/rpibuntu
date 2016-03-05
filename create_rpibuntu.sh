@@ -335,7 +335,12 @@ apt-get install -y rpi-configs rpi-firmware rpi-tools uboot-bin-rpi2
 # install kernel later to ensure the update-uboot script is in place
 apt-get install -y linux-image-rpi
 
+# As modern firmware versions put the device tree at a size-dependent location
+# in memory, we load the device tree to address 0x100 where U-Boot expects it
+# until U-Boot can determine the variable location automatically. See:
+# https://www.raspberrypi.org/forums/viewtopic.php?f=107&t=134018&p=918882&hilit=uboot#p918882
 cp /usr/share/doc/rpi2-configs/config.txt /boot/
+echo -e \"\ndevice_tree_address=0x00000100\" >> /boot/config.txt
 echo -e \"\nkernel=uboot.bin\" >> /boot/config.txt
 
 touch /tmp/.config_chroot

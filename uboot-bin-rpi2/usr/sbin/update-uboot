@@ -7,7 +7,9 @@ UBOOTENV=$(mktemp)
 # default values
 UBOOT_ROOT_PART=${UBOOT_ROOT_PART-/dev/mmcblk0p2}
 UBOOT_KERNEL_ARGS=${UBOOT_KERNEL_ARGS-rootfstype=btrfs console=ttyAMA0,115200 console=tty1 selinux=0 smsc95xx.turbo_mode=N dwc_otg.lpm_enable=0 kgdboc=ttyAMA0,115200 elevator=noop quiet splash logo.nologo}
-UBOOT_DEVICE_TREE=${UBOOT_DEVICE_TREE-bcm2709-rpi-2-b.dtb}
+UBOOT_MENU_TIMEOUT=${UBOOT_MENU_TIMEOUT-2}
+UBOOT_DEFAULT=${UBOOT_DEFAULT-boot0}
+UBOOT_PREPEND_FW_KERNEL_ARGS=${UBOOT_APPEND_FW_KERNEL_ARGS-1}
 
 # check if mkimage tool is installed
 which mkimage >/dev/null || { echo "missing mkimage"; exit 1; }
@@ -20,22 +22,37 @@ fi
 
 echo -n "" > "${UBOOTENV}"
 
+
+# override boot procedure by GPIO state?
 if [ "${UBOOT_FAILSAFE_GPIO_PIN}" != "" ]; then
 	# if GPIO pin is high, execute command
 	echo "if gpio input ${UBOOT_FAILSAFE_GPIO_PIN}; then ; else setenv stdout serial,lcd ; echo \"failsafe pin set\"; ${UBOOT_FAILSAFE_COMMAND}; fi" >> "${UBOOTENV}"
 fi
 
-# first, load device tree file and set default kernel arguments
-echo "
-mmc dev 0
-fatload mmc 0:1 \${fdt_addr_r} ${UBOOT_DEVICE_TREE}
-setenv bootargs 'root=${UBOOT_ROOT_PART} rw rootwait ${UBOOT_KERNEL_ARGS}'
-" >> "${UBOOTENV}"
-
+# override U-Boot output
 if [ "${UBOOT_STDOUT}" != "" ]; then
 	echo "setenv stdout ${UBOOT_STDOUT}" >> "${UBOOTENV}"
 fi
 
+# override device tree?
+if [ "${UBOOT_DEVICE_TREE}" != "" ]; then
+	echo "fatload mmc 0:1 \${fdt_addr_r} ${UBOOT_DEVICE_TREE}" >> "${UBOOTENV}"
+fi
+
+# check if device tree is available in memory. If yes, get bootargs set by
+# firmware and store them in $fw_bootargs. If not, load bcm2709-rpi-2-b.dtb
+# into memory for safety and backwards compatibility
+echo "if fdt addr \${fdt_addr_r}; then fdt get value fw_bootargs /chosen bootargs; printenv fw_bootargs; else fatload mmc 0:1 \${fdt_addr_r} bcm2709-rpi-2-b.dtb; fi;"  >> "${UBOOTENV}"
+
+# set default kernel args
+if [ "${UBOOT_PREPEND_FW_KERNEL_ARGS}" == "1" ]; then
+	# do not append fw_bootargs as it contains rootfstype=ext4
+	echo "setenv bootargs \"\${fw_bootargs} root=${UBOOT_ROOT_PART} rw rootwait ${UBOOT_KERNEL_ARGS}\"" >> "${UBOOTENV}"
+else
+	echo "setenv bootargs \"root=${UBOOT_ROOT_PART} rw rootwait ${UBOOT_KERNEL_ARGS}\"" >> "${UBOOTENV}"
+fi
+
+# menu header
 echo "echo ' '
 echo 'Available boot options:'
 echo '-----------------------'" >> "${UBOOTENV}"
@@ -70,7 +87,7 @@ function vmlinuz_cb() {
 		PRECMDS="${PRECMDS}run bootargs${i};"
 	fi
 	
-	echo "setenv boot${i} '${PRECMDS}fatload mmc 0:1 \${kernel_addr_r} ${kernel}; bootz \${kernel_addr_r} ${UBOOT_INITRD} \${fdt_addr_r}'" >> "${UBOOTENV}"
+	echo "setenv boot${i} '${PRECMDS} fatload mmc 0:1 \${kernel_addr_r} ${kernel}; bootz \${kernel_addr_r} ${UBOOT_INITRD} \${fdt_addr_r}'" >> "${UBOOTENV}"
 	
 	echo "echo '   \"run boot${i}\" will boot ${kernel}'" >> "${UBOOTENV}"
 }
@@ -78,6 +95,7 @@ function vmlinuz_cb() {
 # register callback
 UBOOT_KERNEL_FCTS="${UBOOT_KERNEL_FCTS} vmlinuz_cb"
 
+# look for kernels and execute callbacks
 i=0
 for k in $(ls -vr /boot/vmlinuz*); do
 	PRECMDS=""
@@ -93,6 +111,7 @@ for k in $(ls -vr /boot/vmlinuz*); do
 done
 echo "echo ' '" >> "${UBOOTENV}"
 
+# do we alter boot procedure if failsafe file does not exist?
 if [ "${UBOOT_FAILSAFE_FILE}" != "" ]; then
 	# if file exists, execute command, else create file
 	echo "if test -e mmc 0:1 ${UBOOT_FAILSAFE_FILE}; then setenv stdout serial,lcd ; echo \"failsafe file ${UBOOT_FAILSAFE_FILE} present\"; ${UBOOT_FAILSAFE_COMMAND}; else fatwrite mmc 0:1 0x02050000 ${UBOOT_FAILSAFE_FILE} 1; fi" >> "${UBOOTENV}"
@@ -101,8 +120,8 @@ fi
 echo "
 setenv autoboot run distro_bootcmd
 
-echo 'Will execute \"run boot0\" in 2 seconds, abort with CTRL+c...'
-sleep 2 && run boot0
+echo 'Will execute \"run ${UBOOT_DEFAULT}\" in ${UBOOT_MENU_TIMEOUT} seconds, abort with CTRL+c...'
+sleep ${UBOOT_MENU_TIMEOUT} && run ${UBOOT_DEFAULT}
 " >> "${UBOOTENV}"
 
 # create an image from the config in a format uboot understands
