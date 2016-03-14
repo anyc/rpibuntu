@@ -27,6 +27,10 @@ RELEASE=${RELEASE-15.10}
 RELEASE_NAME=${RELEASE_NAME-wily}
 RPIBUNTU_REVISION=${RPIBUNTU_REVISION-0}
 
+RPIBUNTU_ARCH=${RPIBUNTU_ARCH-armhf}
+UBUNTU_MIRROR=${UBUNTU_MIRROR-http://ports.ubuntu.com/}
+UBUNTU_MIRROR_PATH=${UBUNTU_MIRROR_PATH-ubuntu-ports/}
+
 ### default size of the complete image and the boot partition
 IMG_SIZE_MB=${IMG_SIZE_MB-700}
 BOOT_SIZE_MB=${BOOT_SIZE_MB-100}
@@ -182,9 +186,9 @@ fi
 
 if [ ! -f "${ROOTDIR}"/tmp/.debootstrap_foreign ]; then
 	echo "Starting first debootstrap stage"
-	debootstrap --arch=armhf --foreign \
+	debootstrap --arch=${RPIBUNTU_ARCH} --foreign \
 		--keyring="${UBUNTU_KEYRING}" \
-		${RELEASE_NAME} "${ROOTDIR}" http://ports.ubuntu.com/
+		${RELEASE_NAME} "${ROOTDIR}" ${UBUNTU_MIRROR}/${UBUNTU_MIRROR_PATH}
 	# Do not abort as debootstrap sometimes fails to install all packages for
 	# some reason. This is fixed by an "apt-get -f install" later.
 	#errcheck "first stage debootstrap"
@@ -227,12 +231,12 @@ echo "Preparing system configuration"
 
 echo "Initializing sources.list"
 echo "
-deb http://ports.ubuntu.com/ubuntu-ports/ ${RELEASE_NAME} main restricted universe multiverse
-deb http://ports.ubuntu.com/ubuntu-ports/ ${RELEASE_NAME}-updates main restricted universe multiverse
-deb http://ports.ubuntu.com/ubuntu-ports/ ${RELEASE_NAME}-security main restricted universe multiverse
+deb ${UBUNTU_MIRROR}/${UBUNTU_MIRROR_PATH} ${RELEASE_NAME} main restricted universe multiverse
+deb ${UBUNTU_MIRROR}/${UBUNTU_MIRROR_PATH} ${RELEASE_NAME}-updates main restricted universe multiverse
+deb ${UBUNTU_MIRROR}/${UBUNTU_MIRROR_PATH} ${RELEASE_NAME}-security main restricted universe multiverse
 
-deb http://rpibuntu.kicherer.org/repos/${RELEASE_NAME}/ armhf/
-#deb http://rpibuntu.kicherer.org/repos/${RELEASE_NAME}/ armhf-testing/
+deb http://rpibuntu.kicherer.org/repos/${RELEASE_NAME}/ ${RPIBUNTU_ARCH}/
+#deb http://rpibuntu.kicherer.org/repos/${RELEASE_NAME}/ ${RPIBUNTU_ARCH}-testing/
 " > "${ROOTDIR}"/etc/apt/sources.list
 
 if [ "$(grep "/boot" "${ROOTDIR}"/etc/fstab)" == "" ]; then
