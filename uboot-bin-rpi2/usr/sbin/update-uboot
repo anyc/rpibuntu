@@ -9,7 +9,7 @@ UBOOT_ROOT_PART=${UBOOT_ROOT_PART-/dev/mmcblk0p2}
 UBOOT_KERNEL_ARGS=${UBOOT_KERNEL_ARGS-rootfstype=btrfs console=ttyAMA0,115200 console=tty1 selinux=0 smsc95xx.turbo_mode=N dwc_otg.lpm_enable=0 kgdboc=ttyAMA0,115200 elevator=noop quiet splash logo.nologo}
 UBOOT_MENU_TIMEOUT=${UBOOT_MENU_TIMEOUT-2}
 UBOOT_DEFAULT=${UBOOT_DEFAULT-boot0}
-UBOOT_PREPEND_FW_KERNEL_ARGS=${UBOOT_APPEND_FW_KERNEL_ARGS-1}
+UBOOT_PREPEND_FW_KERNEL_ARGS=${UBOOT_PREPEND_FW_KERNEL_ARGS-1}
 
 # check if mkimage tool is installed
 which mkimage >/dev/null || { echo "missing mkimage"; exit 1; }
