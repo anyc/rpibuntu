@@ -23,8 +23,8 @@
 [ -f create_rpibuntu.cfg ] && source create_rpibuntu.cfg
 
 ### choose the Ubuntu release
-RELEASE=${RELEASE-15.10}
-RELEASE_NAME=${RELEASE_NAME-wily}
+RELEASE=${RELEASE-16.04}
+RELEASE_NAME=${RELEASE_NAME-xenial}
 RPIBUNTU_REVISION=${RPIBUNTU_REVISION-0}
 
 RPIBUNTU_ARCH=${RPIBUNTU_ARCH-armhf}
@@ -214,13 +214,14 @@ cp /proc/mounts "${ROOTDIR}"/etc/mtab || errcheck
 
 # we do not pass --keyring as gpgv is not available in the chroot yet
 echo "
+#! /bin/sh
+
 echo \"Entered deboostrap chroot\"
 if [ -f /debootstrap/debootstrap ]; then
 	/debootstrap/debootstrap --second-stage
 else
 	echo \"Second deboostrap stage already ran\"
 fi
-
 " > "${ROOTDIR}"/tmp/chroot_script
 chmod +x "${ROOTDIR}"/tmp/chroot_script
 
