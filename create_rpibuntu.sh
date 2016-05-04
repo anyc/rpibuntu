@@ -28,7 +28,7 @@ RELEASE_NAME=${RELEASE_NAME-xenial}
 RPIBUNTU_REVISION=${RPIBUNTU_REVISION-0}
 
 RPIBUNTU_ARCH=${RPIBUNTU_ARCH-armhf}
-UBUNTU_MIRROR=${UBUNTU_MIRROR-http://ports.ubuntu.com/}
+UBUNTU_MIRROR=${UBUNTU_MIRROR-http://ports.ubuntu.com}
 UBUNTU_MIRROR_PATH=${UBUNTU_MIRROR_PATH-ubuntu-ports/}
 
 ### default size of the complete image and the boot partition
@@ -340,12 +340,29 @@ apt-get install -y rpi-configs rpi-firmware rpi-tools uboot-bin-rpi2
 # install kernel later to ensure the update-uboot script is in place
 apt-get install -y linux-image-rpi
 
+# setup the firmware config
+cp /usr/share/doc/rpi2-configs/config.txt /boot/
+
+echo -e \"\n
+# For some reason, uboot will not start if the serial console is attached to the
+# bluetooth chip. Maybe uboot should only use the serial console if the
+# corresponding overlay is set. Until it detects such a case, we attach the
+# bluetooth chip to the miniUART port in order to have a functional serial
+# console.
+dtoverlay=pi3-miniuart-bt\" >> /boot/config.txt
+
+echo -e \"\n
+# uncomment to signal the firmware that we will use the opensource graphics driver
+#dtoverlay=vc4-kms-v3d
+#avoid_warnings=2\" >> /boot/config.txt
+
+echo -e \"\n
 # As modern firmware versions put the device tree at a size-dependent location
 # in memory, we load the device tree to address 0x100 where U-Boot expects it
 # until U-Boot can determine the variable location automatically. See:
 # https://www.raspberrypi.org/forums/viewtopic.php?f=107&t=134018&p=918882&hilit=uboot#p918882
-cp /usr/share/doc/rpi2-configs/config.txt /boot/
-echo -e \"\ndevice_tree_address=0x00000100\" >> /boot/config.txt
+device_tree_address=0x00000100\" >> /boot/config.txt
+
 echo -e \"\nkernel=uboot.bin\" >> /boot/config.txt
 
 touch /tmp/.config_chroot

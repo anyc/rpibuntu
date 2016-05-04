@@ -21,4 +21,7 @@ fi
 
 CONVBIN=$(which "${CONV}")
 
-"${CONVBIN}" "${IN}" | ppmquant 220 | ppmtobmp -bpp 8 | gzip -9 > "${OUT}"
+# uncompressed images seem to be more reliable
+#"${CONVBIN}" "${IN}" | ppmquant 220 | ppmtobmp -bpp 8 | gzip -9 > "${OUT}"
+
+"${CONVBIN}" "${IN}" | ppmquant 220 | ppmtobmp -bpp 8 > "${OUT}"

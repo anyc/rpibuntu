@@ -3,5 +3,5 @@ Architecture: all
 Maintainer: dev@kicherer.org
 Depends: u-boot-tools
 Priority: optional
-Version: 20160422
+Version: 20160427
 Description: u-boot binary and scripts for the Raspberry Pi 2
