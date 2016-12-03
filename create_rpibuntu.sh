@@ -32,7 +32,7 @@ UBUNTU_MIRROR=${UBUNTU_MIRROR-http://ports.ubuntu.com}
 UBUNTU_MIRROR_PATH=${UBUNTU_MIRROR_PATH-ubuntu-ports/}
 
 ### default size of the complete image and the boot partition
-IMG_SIZE_MB=${IMG_SIZE_MB-700}
+IMG_SIZE_MB=${IMG_SIZE_MB-800}
 BOOT_SIZE_MB=${BOOT_SIZE_MB-100}
 
 ### additional packages that will be installed
@@ -201,6 +201,11 @@ echo "Preparing for chroot"
 cp "$(which ${QEMU_ARM})" "${ROOTDIR}"/usr/bin || errcheck
 cp "${UBUNTU_KEYRING}" "${ROOTDIR}"/tmp/ || errcheck
 
+if [ ! -f /proc/sys/fs/binfmt_misc/arm ]; then
+	modprobe binfmt_misc
+	echo   ':arm:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x28\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\x00\xff\xfe\xff\xff\xff:/usr/bin/qemu-arm:'"${QEMU_BINFMT_FLAGS}" > /proc/sys/fs/binfmt_misc/register
+fi
+
 # disable device file creation in recent debootstrap versions as we bind mount /dev
 if [ -f "${ROOTDIR}"/debootstrap/functions ]; then
 	sed -ri "s/^\s+setup_devices_simple\s*$/echo disabled_mknod/" "${ROOTDIR}"/debootstrap/functions
@@ -254,10 +259,7 @@ fi
 echo "rpibuntu" > "${ROOTDIR}"/etc/hostname
 sed -i "s/localhost/localhost rpibuntu/" "${ROOTDIR}"/etc/hosts
 
-echo "[Match]
-Name=eth*
-
-[Network]
+echo "[Network]
 DHCP=both
 " > "${ROOTDIR}"/etc/systemd/network/dhcp.network
 
