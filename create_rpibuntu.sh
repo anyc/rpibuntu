@@ -337,7 +337,7 @@ useradd -m -U -G sudo,video,audio,users -s /bin/bash rpibuntu
 echo \"rpibuntu:rpibuntu\" | chpasswd
 
 echo \"installing RPI2 packages\"
-apt-get install -y rpi-configs rpi-firmware rpi-tools uboot-bin-rpi2
+apt-get install -y rpi-configs rpi-firmware rpi-tools uboot-bin-rpi
 
 # install kernel later to ensure the update-uboot script is in place
 apt-get install -y linux-image-rpi
@@ -346,26 +346,26 @@ apt-get install -y linux-image-rpi
 cp /usr/share/doc/rpi2-configs/config.txt /boot/
 
 echo -e \"\n
-# For some reason, uboot will not start if the serial console is attached to the
-# bluetooth chip. Maybe uboot should only use the serial console if the
-# corresponding overlay is set. Until it detects such a case, we attach the
-# bluetooth chip to the miniUART port in order to have a functional serial
-# console.
-dtoverlay=pi3-miniuart-bt\" >> /boot/config.txt
+# We attach the bluetooth chip to the miniUART port to use the main UART for
+# for the serial console.
+dtoverlay=pi3-miniuart-bt
+enable_uart=1
 
-echo -e \"\n
-# uncomment to signal the firmware that we will use the opensource graphics driver
+# Uncomment to signal the firmware that we will use the opensource graphics driver
 #dtoverlay=vc4-kms-v3d
-#avoid_warnings=2\" >> /boot/config.txt
+#avoid_warnings=2
 
-echo -e \"\n
-# As modern firmware versions put the device tree at a size-dependent location
-# in memory, we load the device tree to address 0x100 where U-Boot expects it
-# until U-Boot can determine the variable location automatically. See:
-# https://www.raspberrypi.org/forums/viewtopic.php?f=107&t=134018&p=918882&hilit=uboot#p918882
-device_tree_address=0x00000100\" >> /boot/config.txt
+# RPi2-specific settings
+[pi2]
+kernel=u-boot-rpi2.bin
 
-echo -e \"\nkernel=uboot.bin\" >> /boot/config.txt
+# RPi3-specific settings
+[pi3]
+kernel=u-boot-rpi3_32.bin
+
+# reset filter
+[all]
+\" >> /boot/config.txt
 
 touch /tmp/.config_chroot
 

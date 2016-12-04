@@ -69,7 +69,7 @@ function vmlinuz_cb() {
 	if [ -f /boot/initrd.img-${version} ] || [ -f /boot/initrd.uimg-${version} ]; then
 		echo " with initrd"
 		UBOOT_INITRD=\${ramdisk_addr_r}
-		PRECMDS="${PRECMDS}fatload mmc 0:1 \${ramdisk_addr_r} initrd.uimg-${version};"
+		PRECMDS="${PRECMDS}fatload mmc 0:1 \${ramdisk_addr_r} initrd.uimg-${version}; "
 		
 		if [ ! -f /boot/initrd.uimg-${version} ]; then
 			echo "Creating U-Boot image for /boot/initrd.img-${version}"
@@ -84,10 +84,10 @@ function vmlinuz_cb() {
 	
 	if [ -f /boot/cmdline-${version} ]; then
 		echo "setenv bootargs${i} 'setenv bootargs \"$(cat /boot/cmdline-${version} | tr '\n' ' ' | sed "s/[[:space:]]*$//")\"'" >> "${UBOOTENV}"
-		PRECMDS="${PRECMDS}run bootargs${i};"
+		PRECMDS="${PRECMDS}run bootargs${i}; "
 	fi
 	
-	echo "setenv boot${i} '${PRECMDS} fatload mmc 0:1 \${kernel_addr_r} ${kernel}; bootz \${kernel_addr_r} ${UBOOT_INITRD} \${fdt_addr}'" >> "${UBOOTENV}"
+	echo "setenv boot${i} '${PRECMDS}fatload mmc 0:1 \${kernel_addr_r} ${kernel}; bootz \${kernel_addr_r} ${UBOOT_INITRD} \${fdt_addr}'" >> "${UBOOTENV}"
 	
 	echo "echo '   \"run boot${i}\" will boot ${kernel}'" >> "${UBOOTENV}"
 }
